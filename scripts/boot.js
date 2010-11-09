@@ -35,52 +35,94 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-
-require.ready(function() {
-    var knownPlugins = ["util", "events", "types", "settings"];
+// TODO: Yuck! A global function
+var setupPlugins = function(config, callback) {
+    config = config || {};
+    if (!config.pluginDirs) {
+        config.pluginDirs = {};
+    }
+    config.pluginDirs["../plugins"] = {
+        packages: ["util", "rangeutils", "events", "types", "settings", "canon",
+                            "edit_session", "syntax_manager", "undomanager", 
+                            "keyboard"],
+        singleFiles: ["worker_manager", "syntax_directory", "environment"]
+    };
+    config.pluginDirs["../thirdparty"] = {
+        singleFiles: ["underscore"]
+    };
     
-    var pluginPackageInfo = [
-        {
-            name: "plugins",
-            main: "index"
+    var knownPlugins = [];
+    
+    var pluginPackageInfo = {
+        "../plugins": [
+            {
+                name: "plugins",
+                main: "index"
+            }
+        ]
+    };
+    
+    var paths = {};
+    var i;
+    var location;
+    
+    // we need to ensure that the core plugin directory is loaded first
+    var pluginDirs = [];
+    var pluginDir;
+    for (pluginDir in config.pluginDirs) {
+        pluginDirs.push(pluginDir);
+    }
+    pluginDirs.sort(function(a, b) {
+        if (a == "../plugins") {
+            return -1;
+        } else if (b == "../plugins") {
+            return 1;
+        } else if (a < b) {
+            return -1;
+        } else if (b < a) { 
+            return 1;
+        } else {
+            return 0;
         }
-    ];
-    
-    // set up RequireJS to know that our plugins all have a main module called "index"
-    knownPlugins.forEach(function(pluginName) {
-        pluginPackageInfo.push({
-            name: pluginName,
-            main: "index"
-        });
     });
     
-    require({
-        packagePaths: {
-            "../plugins": pluginPackageInfo
+    // set up RequireJS to know that our plugins all have a main module called "index"
+    for (var dirNum = 0; dirNum < pluginDirs.length; dirNum++) {
+        pluginDir = pluginDirs[dirNum];
+        var dirInfo = config.pluginDirs[pluginDir];
+        if (dirInfo.packages) {
+            location = pluginPackageInfo[pluginDir];
+            if (location === undefined) {
+                pluginPackageInfo[pluginDir] = location = [];
+            }
+            var packages = dirInfo.packages;
+            for (i = 0; i < packages.length; i++) {
+                location.push({
+                    name: packages[i],
+                    main: "index"
+                });
+                knownPlugins.push(packages[i]);
+            }
         }
+        if (dirInfo.singleFiles) {
+            for (i = 0; i < dirInfo.singleFiles.length; i++) {
+                var pluginName = dirInfo.singleFiles[i];
+                paths[pluginName] = pluginDir + "/" + pluginName;
+                knownPlugins.push(pluginName);
+            }
+        }
+    }
+    
+    require({
+        packagePaths: pluginPackageInfo,
+        paths: paths
     });
     require(["plugins"], function() {
         var pluginsModule = require("plugins");
-        pluginsModule.catalog.initializePlugins(knownPlugins).then(function() {
-            var console = require('util/console');
-            console.log('initialized!');
-            
-            // try some stuff out. TODO delete this
-            var newSetting = {
-                name: "allGood",
-                defaultValue: false,
-                type: "boolean"
-            };
-            
-            var settings = require("settings");
-            settings.addSetting(newSetting);
-            settings.settings.set("allGood", true);
-            if (!settings.settings.get("allGood")) {
-                alert("it's not all good :(");
-            } else {
-                console.log("all good!");
-            }
-        });
-        
+        var catalog = new pluginsModule.PluginCatalog();
+        catalog.registerPlugins(knownPlugins);
+        if (callback) {
+            callback(catalog);
+        }
     });
-});
+};

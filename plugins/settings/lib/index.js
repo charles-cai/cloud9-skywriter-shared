@@ -102,7 +102,7 @@ var console = require("util/console");
 var types = require("types");
 var Event = require("events").Event;
 
-exports.init = function() {
+exports.startup = function(data, reason) {
     // TODO add extension point in new style
     // catalog.addExtensionPoint("setting", {
     //     "description":
@@ -158,40 +158,8 @@ exports.init = function() {
     // });
 };
 
-exports.destroy = function() {
+exports.shutdown = function(data, reason) {
 };
-
-var settings = {};
-
-/**
- * Find and configure the settings object.
- * @see MemorySettings.addSetting()
- */
-exports.addSetting = function(settingExt) {
-    settings[settingExt.name] = settingExt;
-    exports.settings.addSetting(settingExt);
-};
-
-/**
- * Fetch an array of the currently known settings
- */
-exports.getSettingNames = function() {
-    return Object.keys(settings);
-};
-
-exports.removeSetting = function(name) {
-    delete settings[name];
-};
-
-exports.getSetting = function(name) {
-    return settings[name];
-};
-
-/**
- * Event that tells people when a setting has changed.
- */
-exports.settingChange = new Event();
-
 
 /**
  * Something of a hack to allow the set command to give a clearer definition
@@ -252,6 +220,15 @@ exports.MemorySettings = function() {
      * Storage for deactivated values
      */
     this._deactivated = {};
+    
+    this._settings = {};
+    
+    /**
+     * Event that tells people when a setting has changed.
+     */
+    this.settingChange = new Event({
+        keyElement: 0
+    });
 };
 
 exports.MemorySettings.prototype = {
@@ -279,7 +256,7 @@ exports.MemorySettings.prototype = {
      * validation.
      */
     set: function(key, value) {
-        var settingExt = settings[key];
+        var settingExt = this._settings[key];
         if (!settingExt) {
             // If there is no definition for this setting, then warn the user
             // and store the setting in raw format. If the setting gets defined,
@@ -299,8 +276,7 @@ exports.MemorySettings.prototype = {
                 this._values[key] = converted;
 
                 // Inform subscriptions of the change
-                exports.settingChange(key, converted);
-                
+                this.settingChange(key, converted);
             } catch (ex) {
                 console.error('Error setting', key, ': ', ex);
             }
@@ -346,6 +322,8 @@ exports.MemorySettings.prototype = {
             var value = this._deactivated[settingExt.name] ||
                     settingExt.defaultValue;
 
+            this._settings[settingExt.name] = settingExt;
+
             // Set the default value up.
             this.set(settingExt.name, value);
         } catch (ex) {
@@ -353,6 +331,15 @@ exports.MemorySettings.prototype = {
         }
     },
 
+    removeSetting: function(name) {
+        delete this._settings[name];
+    },
+    
+    getSettingNames: function() {
+        return Object.keys(settings);
+    },
+    
+>>>>>>> mozilla
     /**
      * Reset the value of the <code>key</code> setting to it's default
      */
@@ -366,7 +353,7 @@ exports.MemorySettings.prototype = {
     },
 
     resetAll: function() {
-        exports.getSettingNames().forEach(function(key) {
+        this.getSettingNames().forEach(function(key) {
             this.resetValue(key);
         }.bind(this));
     },
@@ -376,7 +363,7 @@ exports.MemorySettings.prototype = {
      */
     _list: function() {
         var reply = [];
-        exports.getSettingNames().forEach(function(setting) {
+        this.getSettingNames().forEach(function(setting) {
             reply.push({
                 'key': setting,
                 'value': this.get(setting)
@@ -459,7 +446,7 @@ exports.MemorySettings.prototype = {
         var promises = [];
         var reply = {};
 
-        exports.getSettingNames().forEach(function(key) {
+        this.getSettingNames().forEach(function(key) {
             var value = this.get(key);
             var settingExt = exports.getSetting(key);
             if (settingExt) {
@@ -476,7 +463,7 @@ exports.MemorySettings.prototype = {
      */
     _defaultValues: function() {
         var defaultValues = {};
-        exports.getSettingNames.forEach(function(settingName) {
+        this.getSettingNames.forEach(function(settingName) {
             var settingExt = exports.getSetting(settingName);
             defaultValues[settingExt.name] = settingExt.defaultValue;
         });
